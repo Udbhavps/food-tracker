@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getEnv } from "@/lib/env";
+import { getMode } from "@/lib/mode";
 
 const PUBLIC_PATHS = ["/login", "/auth"];
 
@@ -10,6 +11,9 @@ function isPublic(pathname: string) {
 
 /** Refreshes the sign-in session on every request and sends signed-out visitors to /login. */
 export async function proxy(request: NextRequest) {
+  // Local mode (default): the app opens straight away, no sign-in. Cloud mode enforces it.
+  if (getMode() !== "cloud") return NextResponse.next({ request });
+
   const env = getEnv();
   // Not configured yet (fresh checkout): let pages render their own setup message.
   if (!env) return NextResponse.next({ request });
