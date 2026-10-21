@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Food Tracker
 
-## Getting Started
+A private-by-default web app (installable PWA) to log where you ate, keep recommendations, and find places to try nearby. Built for friends and family from day one.
 
-First, run the development server:
+**Status: Phase 0 (foundations).** Sign-in shell, database schema with row level security (RLS), automated security tests, CI. The map, places, visit log and "Near me" arrive in Phase 1+.
 
+## Stack
+Next.js (App Router) + TypeScript + Tailwind, Supabase (Postgres, Auth), Vitest, Playwright, GitHub Actions. Maps/Places (Google) come in Phase 1-2.
+
+## Quick start
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # fill in the three values
+npm run dev                  # http://localhost:3000
 ```
+Without `.env.local` the app still runs and shows a setup message on the sign-in page.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## One-time setup you need accounts for
+1. **Supabase project**: copy the project URL and anon key into `.env.local`. Apply the schema by running `supabase/migrations/*.sql` in order (SQL editor, or the Supabase CLI `supabase db push`).
+2. **Google sign-in**: create an OAuth client in Google Cloud, add it under Supabase Auth > Providers > Google. Add `http://localhost:3000/auth/callback` and your production URL + `/auth/callback` to Supabase Auth > URL Configuration > Redirect URLs.
+3. **Email sign-in links**: work out of the box, but Supabase's built-in email sender is heavily rate-limited. Configure custom SMTP before inviting testers.
+4. **Hosting (later)**: Vercel, with separate Supabase projects for staging and production.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commands
+| Command | What it does |
+|---|---|
+| `npm run lint` / `npm run typecheck` | Static checks |
+| `npm test` | Unit tests (fast, no database) |
+| `npm run test:db` | Starts a throwaway local PostgreSQL, applies the migrations, runs the security tests |
+| `npm run test:e2e` | Playwright tests on phone-sized Android and iPhone profiles (needs `npx playwright install` once) |
+| `npm run build` | Production build |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`test:db` needs PostgreSQL 14+ binaries installed locally (set `PGBIN` if they are not under `/usr/lib/postgresql/*/bin`).
 
-## Learn More
+## Security model (what the database enforces)
+- **Private by default**: `user_places` and `visits` are readable and writable only by their owner. Sharing a list never exposes anyone's private notes or visits.
+- **Shared catalogue**: `places` is one shared row per real restaurant (Google place id). Signed-in users can read and add; nobody can edit or delete through the API.
+- **Lists**: roles owner / editor / viewer. Only owners rename, delete, invite or remove people; viewers can read; editors can add items. Exactly one owner per list.
+- **Invites**: created and accepted only through database functions. Tokens are random, stored hashed, single use, and expire.
+- **Recommendations**: only between people who share a list; recipients can change only the status.
+- **Cost control**: `consume_quota()` enforces per-user daily caps for Places search, nearby and link-parse calls.
+- **Your data**: `export_my_data()` returns your own data; deleting an account cascades to all their rows.
+- **Least privilege**: anonymous users have no table access; clients only get column-level UPDATE rights on the fields they may change.
 
-To learn more about Next.js, take a look at the following resources:
+## Verification status
+- Verified locally: lint, typecheck, 13 unit tests, production build, 22 database security tests (also checked by deliberately weakening two policies and confirming the tests fail), and a curl smoke test of sign-in redirects.
+- Not yet run: the Playwright suite (it needs a browser download), and anything against a real Supabase project or real Google sign-in.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Roadmap
+Phase 1 core (import places, map, place page, log a visit) → Phase 2 add-from-link and Near me → Phase 3 shared lists UI and invites → Phase 4 hardening and beta tooling. Product plan: see the project docs.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+- `AGENTS.md` is generated by Next.js for AI coding tools; this Next.js version differs from older releases (for example `proxy.ts` replaces `middleware.ts`, and cookies/params are async).
+- `npm audit` reports dev-tooling advisories in the ESLint toolchain; production dependencies have none (`npm audit --omit=dev`).
