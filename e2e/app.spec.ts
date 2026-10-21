@@ -62,3 +62,28 @@ test("no horizontal scrolling on any main screen", async ({ page }) => {
     expect(overflow, path).toBeLessThanOrEqual(0);
   }
 });
+
+test("pasting a Google Maps link fills in the name and location", async ({ page }) => {
+  await page.goto("/add");
+  await page.getByLabel("Paste a link").fill(
+    "https://www.google.com/maps/place/Test+Chaat+House/@12.97,77.64,17z/data=!3d12.9712!4d77.6411",
+  );
+  await page.getByRole("button", { name: "Fill in from link" }).click();
+  await expect(page.getByLabel("Name")).toHaveValue("Test Chaat House");
+  await expect(page.getByLabel(/Coordinates/)).toHaveValue("12.9712, 77.6411");
+});
+
+test("pasting an Instagram reel link keeps the link and asks for the name", async ({ page }) => {
+  await page.goto("/add");
+  await page.getByLabel("Paste a link").fill("https://www.instagram.com/reel/AbC123/?igsh=zzz");
+  await page.getByRole("button", { name: "Fill in from link" }).click();
+  await expect(page.getByLabel(/^Link, e.g./)).toHaveValue("https://www.instagram.com/reel/AbC123/");
+  await expect(page.getByText(/type it below/)).toBeVisible();
+});
+
+test("an unrecognised link shows a message", async ({ page }) => {
+  await page.goto("/add");
+  await page.getByLabel("Paste a link").fill("https://example.com");
+  await page.getByRole("button", { name: "Fill in from link" }).click();
+  await expect(page.getByText(/does not look like/)).toBeVisible();
+});

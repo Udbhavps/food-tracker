@@ -6,6 +6,7 @@ import { Shell } from "@/components/shell";
 import { inputClass, primaryButton, secondaryButton } from "@/components/ui";
 import { addCustomPlace, setStatus, slugId } from "@/lib/places/logic";
 import { exportJson, importJson, usePlaces } from "@/lib/places/store";
+import { parseLink } from "@/lib/places/link";
 import { placeSchema, type Status } from "@/lib/places/types";
 
 export function AddScreen() {
@@ -20,6 +21,47 @@ export function AddScreen() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const file = useRef<HTMLInputElement>(null);
+  const [pasted, setPasted] = useState("");
+  const [linkMsg, setLinkMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function applyMaps(p: { name: string; lat: number | null; lng: number | null }) {
+    if (p.name) setName(p.name);
+    if (p.lat !== null && p.lng !== null) setCoords(`${p.lat}, ${p.lng}`);
+    setLinkMsg(
+      p.lat === null
+        ? "Got the name but no exact location from this link. You can add coordinates below."
+        : "Filled in the name and location. Check them, then add the place.",
+    );
+  }
+
+  async function readLink() {
+    setLinkMsg("");
+    const r = parseLink(pasted);
+    if (r.kind === "instagram") {
+      setLink(r.url);
+      setLinkMsg("Saved the reel link. Instagram does not share the place name, so type it below.");
+    } else if (r.kind === "maps") {
+      applyMaps(r);
+    } else if (r.kind === "maps-short") {
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/resolve-link?url=${encodeURIComponent(r.url)}`);
+        const data: { url?: string } = await res.json();
+        const full = data.url ? parseLink(data.url) : null;
+        if (full?.kind === "maps") applyMaps(full);
+        else setLinkMsg("Could not open that short link. Open it in Google Maps, tap Share, and paste the longer link instead.");
+      } catch {
+        setLinkMsg("Could not open that short link. Check your connection or paste the longer link.");
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      setLinkMsg("That does not look like a Google Maps or Instagram post/reel link.");
+    }
+  }
+
+  const clash = name.trim() && places.some((p) => p.name.toLowerCase() === name.trim().toLowerCase());
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,11 +105,28 @@ export function AddScreen() {
 
   return (
     <Shell title="Add a place">
+      <section className="mb-6 flex flex-col gap-2 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Paste a link
+          <input
+            className={inputClass}
+            inputMode="url"
+            placeholder="Google Maps or Instagram link"
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+          />
+        </label>
+        <button type="button" className={secondaryButton} onClick={() => void readLink()} disabled={busy || !pasted.trim()}>
+          {busy ? "Reading…" : "Fill in from link"}
+        </button>
+        {linkMsg && <p role="status" className="text-sm">{linkMsg}</p>}
+      </section>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <label className="flex flex-col gap-1 text-sm">
           Name
           <input required maxLength={120} className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
         </label>
+        {clash && <p role="status" className="text-sm text-amber-700 dark:text-amber-400">A place with this name is already saved. Add it anyway only if it is a different outlet.</p>}
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1 text-sm">
             Area
