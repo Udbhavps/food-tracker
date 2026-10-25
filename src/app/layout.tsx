@@ -3,6 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "Food Tracker", template: "%s | Food Tracker" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "Food Tracker", statusBarStyle: "default" },
   description: "Log where you ate, keep recommendations, and find places to try nearby.",
 };
 
